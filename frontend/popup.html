@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Resume Tailor</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 12px;
+      width: 360px;
+      height: 350px; /* compact */
+      font-family: "Poppins", "Segoe UI", Roboto, Arial, sans-serif;
+      background: #f9fafb;
+      color: #1f1f2e;
+      overflow: hidden;
+    }
+
+    /* Flip */
+    .flip-container { perspective: 1000px; position: relative; height: 100%; }
+    .flipper { transition: 0.6s; transform-style: preserve-3d; position: relative; height: 100%; }
+    .front, .back { backface-visibility: hidden; position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+    .front { z-index: 2; overflow-y:auto; }
+    .back { transform: rotateY(180deg); display: flex; flex-direction: column; }
+    .flip-container.flipped .flipper { transform: rotateY(180deg); }
+
+    /* Inputs / Buttons */
+    .label { font-size: 12px; font-weight: 600; margin: 6px 0 2px; color: #374151; }
+    .upload-box { display: flex; gap: 6px; align-items: center; }
+    .upload-box input[type="file"] {
+      flex: 1; border: 2px dashed #d1d5db; border-radius: 8px;
+      padding: 6px; font-size: 12px; color: #6b7280; background: #fafafa; cursor: pointer;
+    }
+    .upload-box button, button.action, #flipBtn {
+      background: #3b82f6; color: #fff; border: none; border-radius: 6px;
+      padding: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s;
+    }
+    .upload-box button:hover, button.action:hover, #flipBtn:hover { background: #2563eb; }
+    input, textarea {
+      width: 100%; border: 1px solid #d1d5db; border-radius: 6px;
+      padding: 6px; font-size: 12px; box-sizing: border-box; background: #fff;
+    }
+    textarea { height: 50px; resize: none; }
+    input:focus, textarea:focus {
+      border-color: #3b82f6; outline: none; box-shadow: 0 0 0 2px rgba(59,130,246,0.3);
+    }
+    .row { display: flex; gap: 6px; }
+    .row input, .row button { flex: 1; }
+    #matchResult { font-size: 11px; text-align: center; margin-top: 4px; font-weight: 600; color: #2563eb; }
+    #status { font-size: 11px; text-align: center; margin-top: 6px; padding: 4px; border-radius: 4px; background: #f3f4f6; color: #4b5563; }
+    #downloads { display: none; gap: 6px; margin-top: 6px; }
+
+    /* Chat */
+    .chat-box { flex: 1; overflow-y: auto; font-size: 12px; padding: 6px; background: #fff; border: 1px solid #ddd; border-radius: 6px; }
+    .chat-input { display: flex; margin-top: 6px; }
+    .chat-input input { flex: 1; border: 1px solid #ccc; border-radius: 6px; padding: 6px; font-size: 12px; }
+    .msg-user, .msg-bot { margin: 4px 0; max-width: 80%; padding: 6px 8px; border-radius: 8px; }
+    .msg-user { background: #2563eb; color: #fff; margin-left: auto; text-align: right; }
+    .msg-bot { background: #f3f4f6; color: #1f2937; position: relative; }
+    .copy-btn { position: absolute; top: 2px; right: 4px; font-size: 10px; cursor: pointer; color: #2563eb; }
+  </style>
+</head>
+<body>
+  <div class="flip-container" id="flipContainer">
+    <div class="flipper">
+
+      <!-- FRONT -->
+      <div class="front">
+        <h3 style="text-align:center;color:#2563eb;margin:0;">Resume Tailor</h3>
+
+        <div class="label">Upload Resume File</div>
+        <div class="upload-box">
+          <input type="file" id="resumeUpload" accept=".docx,.pdf"/>
+          <button id="uploadBtn">Upload</button>
+        </div>
+
+        <div class="label">Company & Role</div>
+        <div class="row">
+          <input id="company" type="text" placeholder="Company"/>
+          <input id="role" type="text" placeholder="Role"/>
+        </div>
+
+        <div class="label">Job Description</div>
+        <textarea id="jdText" placeholder="Paste JD or use 'Get JD'"></textarea>
+        <div class="row">
+          <button id="getJD" class="action">Get JD</button>
+          <button id="checkMatchBtn" class="action">Check Match</button>
+        </div>
+
+        <div id="matchResult">Match Score: Not checked yet</div>
+
+        <div class="row">
+          <button id="tailorBtn" class="action">Tailor</button>
+          <button id="appliedBtn" class="action">Applied</button>
+        </div>
+
+        <div id="downloads" class="row">
+          <button id="downloadDocxBtn" class="action">DOCX</button>
+          <button id="downloadPdfBtn" class="action">PDF</button>
+        </div>
+
+        <div id="status">🔵 Ready</div>
+      </div>
+
+      <!-- BACK: Chat -->
+      <div class="back">
+        <div id="chatBox" class="chat-box"></div>
+        <div class="chat-input">
+          <input id="chatInput" type="text" placeholder="Ask something..."/>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button id="flipBtn" style="margin-top:4px;width:100%;" class="action">↔ Flip</button>
+  <script src="popup.js"></script>
+</body>
+</html>
