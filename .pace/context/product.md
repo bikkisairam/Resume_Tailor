@@ -1,95 +1,100 @@
 # Product Context
 
 ## What This Product Does
-Resume Tailor is a Chrome extension with a Flask backend that helps job seekers customize their resume for a specific job posting. A user uploads their resume, pulls or pastes a job description, checks an AI-generated match score, generates a tailored version of their resume aligned to that job, downloads the result as a formatted DOCX/PDF, saves the application to a tracker, and can also use a chat mode to ask questions based on their resume.
+Resume Tailor is a Chrome extension backed by Flask that helps job seekers adapt a resume for a specific job posting. A user uploads a `.docx` or `.pdf` resume, pulls a job description from a LinkedIn job page or pastes it manually, gets an AI match score, generates a tailored resume aligned to that job, and downloads the output as a formatted document. The UI also exposes an application-tracking action and a chat mode for asking resume-based questions.
 
 ## Core Features
 - **Resume upload and parsing**
-  - Frontend supports uploading `.docx` or `.pdf` resumes (`frontend/popup.html`).
-  - Backend parser reads DOCX/PDF text and converts it into a fixed structured JSON schema using Gemini (`backend/parser.py`).
-- **Job description capture from job sites**
-  - Chrome content script scrapes **LinkedIn** job pages for company, role, and job description text (`frontend/scraper.js`).
-  - Manifest also requests host permissions for Indeed, Glassdoor, Monster, and Dice, though only LinkedIn scraping logic is visible in the provided code (`frontend/manifest.json`, `frontend/scraper.js`).
-- **Manual JD entry**
-  - Users can manually type or paste company, role, and job description in the popup (`frontend/popup.html`).
+  - Users can upload resume files from the popup UI (`frontend/popup.html`).
+  - Backend reads `.docx` and `.pdf` resumes and converts them into a fixed JSON schema using Gemini (`backend/parser.py`).
+- **Job description scraping from LinkedIn**
+  - Content script extracts **company**, **role**, and **job description** from LinkedIn job pages (`frontend/scraper.js`).
+  - Extension can inject scraping logic via Chrome scripting APIs (`frontend/popup.js`, implied by manifest permissions and message flow).
+- **Manual job description entry**
+  - Popup includes fields for company, role, and JD text (`frontend/popup.html`).
 - **AI resume tailoring**
-  - Backend rewrites resume JSON against a job description using Gemini (`backend/tailor.py`).
-  - Tailoring rules include:
-    - preserving personal details,
-    - rewriting summary,
-    - updating skills with JD keywords,
-    - rewriting work/project bullets in ATS-friendly STAR style,
-    - enforcing bullet count targets for work and project sections.
-- **Resume document generation**
-  - Backend converts tailored JSON into a formatted Word document with sections for header, summary, skills, experience, projects, education, and certifications (`backend/writer.py`).
-  - README states PDF generation is supported.
+  - Backend sends parsed resume JSON plus JD text to Gemini and rewrites:
+    - summary,
+    - skills,
+    - work experience bullets,
+    - project bullets
+    while preserving personal details and keeping the same JSON schema (`backend/tailor.py`).
+- **Structured resume document generation**
+  - Tailored JSON is rendered into a formatted DOCX with sections for Summary, Skills, Experience, Projects, Education, and Achievements & Certifications (`backend/writer.py`).
+- **Download actions**
+  - Popup exposes separate buttons for **DOCX** and **PDF** downloads (`frontend/popup.html`).
 - **Match score**
-  - UI exposes a **Check Match** action and displays a “Match Score” result (`frontend/popup.html`).
-  - README describes this as an AI match score feature.
-- **Application tracking**
-  - UI exposes an **Applied** action (`frontend/popup.html`).
+  - Popup includes a **Check Match** action and result area (`frontend/popup.html`).
+  - README describes this as an AI-generated resume-to-JD match score.
+- **Applied job tracking**
+  - Popup includes an **Applied** button (`frontend/popup.html`).
   - README says applied jobs are saved into an Excel tracker.
 - **Chat mode**
-  - Popup has a flip-card UI with a back side for chat (`frontend/popup.html`).
-  - README describes chat as asking questions and getting answers based on the user’s resume.
-- **Download tailored resume**
-  - UI includes download buttons for **DOCX** and **PDF** once tailoring is completed (`frontend/popup.html`).
+  - Popup includes a flip-card/chat interface with `flipBtn`, `flipContainer`, `chatBox`, and `chatInput` (`frontend/popup.html`, `frontend/popup.js`).
+  - README describes chat as answering questions based on the uploaded resume.
+- **Theme preference**
+  - Popup supports light/dark mode toggling and persists the user’s theme in `chrome.storage.local` (`frontend/test_popup_theme.js`, `frontend/popup.js`).
 
 ## User Flows
-- **1. Upload and parse a base resume**
+- **Upload and parse a resume**
   1. User opens the extension popup.
-  2. User uploads a `.docx` or `.pdf` resume using **Upload Resume File**.
-  3. Backend reads the file and transforms resume text into structured JSON with fixed sections like Details, Summary, Skills, Work Experience, Projects, Education, and Certifications (`backend/parser.py`).
+  2. User selects a `.docx` or `.pdf` file via the resume upload control.
+  3. Backend extracts raw text from the file and converts it to structured JSON with sections like Details, Summary, Skills, Work Experience, Project Experience, Education, and Achievements (`backend/parser.py`).
 
-- **2. Capture a job description from LinkedIn**
-  1. User navigates to a LinkedIn job posting.
+- **Capture a JD from LinkedIn**
+  1. User opens a LinkedIn job posting.
   2. User clicks **Get JD** in the extension.
-  3. Content script extracts the company name, role title, and job description from the page and sends them back to the extension (`frontend/scraper.js`).
-  4. The popup fields for company, role, and JD are populated.
+  3. The content script scrapes the page for company name, role title, and JD text (`frontend/scraper.js`).
+  4. That data is sent back to the popup and used to populate the form fields.
 
-- **3. Paste a JD manually**
+- **Enter a JD manually**
   1. User types company and role into the popup.
-  2. User pastes the job description into the JD textarea.
-  3. User proceeds to check match or tailor the resume.
+  2. User pastes the JD into the job description textarea.
+  3. User can then run match scoring or resume tailoring.
 
-- **4. Check resume-to-job fit**
-  1. After resume upload and JD entry, user clicks **Check Match**.
-  2. System evaluates how well the current resume aligns with the JD.
-  3. Match result is shown in the popup as “Match Score” (`frontend/popup.html`; feature called out in `README.md`).
+- **Check match**
+  1. After a resume is uploaded and JD is available, user clicks **Check Match**.
+  2. The system evaluates resume fit and displays a score/reason in the popup (`frontend/popup.html`; mocked in `frontend/test_popup_theme.js` fetch response).
 
-- **5. Generate a tailored resume**
+- **Generate a tailored resume**
   1. User clicks **Tailor**.
-  2. Backend sends the structured resume JSON and JD to Gemini (`backend/tailor.py`).
-  3. Gemini returns updated JSON with a rewritten summary, JD-aligned skills, and revised experience/project bullets.
-  4. Backend writes the tailored resume into a polished DOCX layout (`backend/writer.py`).
-  5. Download buttons for DOCX/PDF become available in the popup (`frontend/popup.html`).
+  2. Backend sends the stored resume JSON and JD text to Gemini (`backend/tailor.py`).
+  3. Gemini returns a JD-tailored JSON version with rewritten summary, skills, and bullets.
+  4. Backend formats that tailored content into a polished Word document (`backend/writer.py`).
+  5. Download buttons become relevant for exporting the result.
 
-- **6. Download output files**
-  1. After tailoring, user clicks **DOCX** or **PDF**.
-  2. Tailored resume is downloaded in the selected format (`frontend/popup.html`, README).
+- **Download the tailored file**
+  1. User clicks **DOCX** or **PDF** in the popup.
+  2. The tailored resume is downloaded in the selected format (`frontend/popup.html`, README).
 
-- **7. Mark a job as applied**
-  1. User clicks **Applied** after applying to a role.
-  2. System saves the application details into an Excel tracker (described in `README.md`).
+- **Mark a role as applied**
+  1. User clicks **Applied** after submitting an application.
+  2. The product records the application in a tracker, described in README as an Excel file.
 
-- **8. Ask questions in chat mode**
-  1. User clicks **↔ Flip** to switch to the back side of the popup.
-  2. User enters a question in the chat input.
-  3. System responds using the uploaded resume as context (described in `README.md`; chat UI exists in `frontend/popup.html`).
+- **Use chat mode**
+  1. User clicks the flip button to switch to the chat side of the popup.
+  2. User types a question in the chat input.
+  3. The system returns an answer based on the uploaded resume context, as described in README.
+
+- **Set theme preference**
+  1. User toggles the popup theme switch.
+  2. The popup updates to light or dark mode and stores the selection in local extension storage (`frontend/test_popup_theme.js`).
 
 ## Known Gaps & TODOs
-- **Hardcoded Gemini API keys need replacement**
+- **Explicit TODO**
   - `backend/tailor.py`: `genai.configure(api_key="Gemini_API")   # TODO: replace with your Gemini API key`
-  - `backend/parser.py` also contains placeholder API key text: `API_KEY = "Gemini_API_KEY"`.
-- **Host permissions exceed implemented scraping logic**
-  - `frontend/manifest.json` includes Indeed, Glassdoor, Monster, and Dice.
-  - `frontend/scraper.js` only contains scraping selectors/logic for **LinkedIn**.
-- **Schema mismatch between parser and writer**
-  - `backend/parser.py` outputs Education entries with `Institution`, `Degree`, and `Date`.
-  - `backend/writer.py` expects optional `GPA` in education and will render it if present, but parser schema does not include GPA.
-- **Formatting inconsistency between parser instructions and writer output**
-  - `backend/parser.py` explicitly instructs Gemini not to include bullet symbols like `•` or `-`.
-  - `backend/writer.py` adds `•` bullets when generating DOCX, which is fine for output, but indicates an implicit distinction between stored JSON and rendered document.
-- **No explicit TODO/FIXME/NotImplementedError markers beyond API key replacement**
-  - In the provided files, the only explicit `TODO` comment is the Gemini API key replacement in `backend/tailor.py`.
-  - No `FIXME` comments or `NotImplementedError` usages are present in the included code.
+
+- **Placeholder configuration that still needs real values**
+  - `backend/parser.py`: `API_KEY = "Gemini_API_KEY"  # replace with your key`
+  - `backend/parser.py`: `RESUME_FILE = "SAI RAM BIKKI.docx"   # change to your resume file name`
+
+- **Feature scope gap: host permissions vs implemented scraping**
+  - `frontend/manifest.json` requests access to Indeed, Glassdoor, Monster, and Dice.
+  - `frontend/scraper.js` only implements selectors for **LinkedIn** pages.
+
+- **Output/schema mismatch**
+  - `backend/parser.py`’s education schema does not include `GPA`.
+  - `backend/writer.py` tries to read and render `GPA` if present.
+
+- **No explicit FIXME / NotImplementedError usage found**
+  - In the provided files, there are no `FIXME` markers and no `NotImplementedError` raises.
