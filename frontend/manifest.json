@@ -3,7 +3,7 @@
   "name": "Resume Tailor",
   "version": "1.0",
   "description": "Tailor your resume to job descriptions.",
-  "permissions": ["scripting", "activeTab"],
+  "permissions": ["scripting", "activeTab", "storage"],
   "host_permissions": [
     "https://www.linkedin.com/*",
     "https://*.indeed.com/*",
