@@ -2,124 +2,389 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Resume Tailor</title>
-  <link rel="stylesheet" href="style.css" />
+  <style>
+    :root {
+      --popup-width: 360px;
+      --popup-height: 350px;
+      --space-xs: 4px;
+      --space-sm: 6px;
+      --space-md: 8px;
+      --space-lg: 12px;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --font-size-xs: 11px;
+      --font-size-sm: 12px;
+      --font-size-md: 14px;
+      --shadow-focus: 0 0 0 2px rgba(59, 130, 246, 0.3);
+      --color-primary: #3b82f6;
+      --color-primary-hover: #2563eb;
+      --color-primary-contrast: #ffffff;
+      --color-success: #16a34a;
+      --color-warning: #ea580c;
+      --color-danger: #dc2626;
+      --light-body-bg: #f9fafb;
+      --light-surface: #ffffff;
+      --light-surface-muted: #f3f4f6;
+      --light-border: #d1d5db;
+      --light-border-soft: #dddddd;
+      --light-text: #1f1f2e;
+      --light-text-muted: #4b5563;
+      --light-label: #374151;
+      --light-file-text: #6b7280;
+      --dark-body-bg: #111827;
+      --dark-surface: #1f2937;
+      --dark-surface-muted: #374151;
+      --dark-border: #4b5563;
+      --dark-border-soft: #6b7280;
+      --dark-text: #f9fafb;
+      --dark-text-muted: #d1d5db;
+      --dark-label: #e5e7eb;
+      --dark-file-text: #cbd5e1;
+      --theme-body-bg: var(--light-body-bg);
+      --theme-surface: var(--light-surface);
+      --theme-surface-muted: var(--light-surface-muted);
+      --theme-border: var(--light-border);
+      --theme-border-soft: var(--light-border-soft);
+      --theme-text: var(--light-text);
+      --theme-text-muted: var(--light-text-muted);
+      --theme-label: var(--light-label);
+      --theme-file-text: var(--light-file-text);
+      --theme-title: var(--color-primary-hover);
+      --theme-match: var(--color-primary-hover);
+      --theme-user-message-bg: var(--color-primary-hover);
+      --theme-user-message-text: var(--color-primary-contrast);
+      --theme-bot-message-bg: var(--light-surface-muted);
+      --theme-bot-message-text: #1f2937;
+    }
+
+    body[data-theme="dark"] {
+      --theme-body-bg: var(--dark-body-bg);
+      --theme-surface: var(--dark-surface);
+      --theme-surface-muted: var(--dark-surface-muted);
+      --theme-border: var(--dark-border);
+      --theme-border-soft: var(--dark-border-soft);
+      --theme-text: var(--dark-text);
+      --theme-text-muted: var(--dark-text-muted);
+      --theme-label: var(--dark-label);
+      --theme-file-text: var(--dark-file-text);
+      --theme-title: #93c5fd;
+      --theme-match: #93c5fd;
+      --theme-user-message-bg: #1d4ed8;
+      --theme-user-message-text: var(--color-primary-contrast);
+      --theme-bot-message-bg: #0f172a;
+      --theme-bot-message-text: var(--dark-text);
+    }
+
+    body {
+      margin: 0;
+      padding: var(--space-lg);
+      width: var(--popup-width);
+      height: var(--popup-height);
+      font-family: "Poppins", "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--theme-body-bg);
+      color: var(--theme-text);
+      overflow: hidden;
+      transition: background 0.2s ease, color 0.2s ease;
+      box-sizing: border-box;
+    }
+
+    .flip-container {
+      perspective: 1000px;
+      position: relative;
+      height: 100%;
+    }
+
+    .flipper {
+      transition: 0.6s;
+      transform-style: preserve-3d;
+      position: relative;
+      height: 100%;
+    }
+
+    .front,
+    .back {
+      backface-visibility: hidden;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--theme-body-bg);
+      color: var(--theme-text);
+    }
+
+    .front {
+      z-index: 2;
+      overflow-y: auto;
+    }
+
+    .back {
+      transform: rotateY(180deg);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .flip-container.flipped .flipper {
+      transform: rotateY(180deg);
+    }
+
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-md);
+      margin-bottom: var(--space-md);
+    }
+
+    .popup-title {
+      text-align: center;
+      color: var(--theme-title);
+      margin: 0;
+      font-size: 18px;
+      flex: 1;
+    }
+
+    .theme-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-sm);
+      font-size: var(--font-size-sm);
+      color: var(--theme-label);
+      background: var(--theme-surface);
+      border: 1px solid var(--theme-border);
+      border-radius: 999px;
+      padding: var(--space-xs) var(--space-md);
+    }
+
+    .theme-toggle input {
+      width: auto;
+      margin: 0;
+      accent-color: var(--color-primary);
+    }
+
+    .label {
+      font-size: var(--font-size-sm);
+      font-weight: 600;
+      margin: var(--space-sm) 0 2px;
+      color: var(--theme-label);
+    }
+
+    .upload-box {
+      display: flex;
+      gap: var(--space-sm);
+      align-items: center;
+    }
+
+    .upload-box input[type="file"] {
+      flex: 1;
+      border: 2px dashed var(--theme-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-sm);
+      font-size: var(--font-size-sm);
+      color: var(--theme-file-text);
+      background: var(--theme-surface);
+      cursor: pointer;
+    }
+
+    .upload-box button,
+    button.action,
+    #flipBtn {
+      background: var(--color-primary);
+      color: var(--color-primary-contrast);
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: var(--space-sm);
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .upload-box button:hover,
+    button.action:hover,
+    #flipBtn:hover {
+      background: var(--color-primary-hover);
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--theme-border);
+      border-radius: var(--radius-sm);
+      padding: var(--space-sm);
+      font-size: var(--font-size-sm);
+      box-sizing: border-box;
+      background: var(--theme-surface);
+      color: var(--theme-text);
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: var(--theme-text-muted);
+    }
+
+    textarea {
+      height: 50px;
+      resize: none;
+    }
+
+    input:focus,
+    textarea:focus {
+      border-color: var(--color-primary);
+      outline: none;
+      box-shadow: var(--shadow-focus);
+    }
+
+    .row {
+      display: flex;
+      gap: var(--space-sm);
+    }
+
+    .row input,
+    .row button {
+      flex: 1;
+    }
+
+    #matchResult {
+      font-size: var(--font-size-xs);
+      text-align: center;
+      margin-top: var(--space-xs);
+      font-weight: 600;
+      color: var(--theme-match);
+      background: var(--theme-surface);
+      border: 1px solid var(--theme-border);
+      border-radius: var(--radius-sm);
+      padding: var(--space-sm);
+    }
+
+    #status {
+      font-size: var(--font-size-xs);
+      text-align: center;
+      margin-top: var(--space-sm);
+      padding: var(--space-xs);
+      border-radius: var(--space-xs);
+      background: var(--theme-surface-muted);
+      color: var(--theme-text-muted);
+      border: 1px solid var(--theme-border);
+    }
+
+    #downloads {
+      display: none;
+      gap: var(--space-sm);
+      margin-top: var(--space-sm);
+    }
+
+    .chat-box {
+      flex: 1;
+      overflow-y: auto;
+      font-size: var(--font-size-sm);
+      padding: var(--space-sm);
+      background: var(--theme-surface);
+      border: 1px solid var(--theme-border-soft);
+      border-radius: var(--radius-sm);
+      color: var(--theme-text);
+    }
+
+    .chat-input {
+      display: flex;
+      margin-top: var(--space-sm);
+    }
+
+    .chat-input input {
+      flex: 1;
+      border: 1px solid var(--theme-border);
+      border-radius: var(--radius-sm);
+      padding: var(--space-sm);
+      font-size: var(--font-size-sm);
+    }
+
+    .msg-user,
+    .msg-bot {
+      margin: var(--space-xs) 0;
+      max-width: 80%;
+      padding: var(--space-sm) var(--space-md);
+      border-radius: var(--radius-md);
+    }
+
+    .msg-user {
+      background: var(--theme-user-message-bg);
+      color: var(--theme-user-message-text);
+      margin-left: auto;
+      text-align: right;
+    }
+
+    .msg-bot {
+      background: var(--theme-bot-message-bg);
+      color: var(--theme-bot-message-text);
+      position: relative;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 2px;
+      right: var(--space-xs);
+      font-size: 10px;
+      cursor: pointer;
+      color: var(--theme-title);
+    }
+  </style>
 </head>
 <body data-theme="light">
-  <div class="popup-shell">
-    <div class="flip-container" id="flipContainer">
-      <div class="flipper">
-        <section class="front popup-face">
-          <div class="premium-panel hero-panel">
-            <div class="header-row premium-header">
-              <div class="title-group">
-                <p class="eyebrow">AI Resume Workflow</p>
-                <h1 class="popup-title">Resume Tailor</h1>
-                <p class="subtitle">Premium job targeting from upload to outreach.</p>
-              </div>
-              <label class="theme-toggle" for="themeToggle">
-                <input id="themeToggle" type="checkbox" aria-label="Toggle dark mode" />
-                <span id="themeToggleLabel">Light mode</span>
-              </label>
-            </div>
-          </div>
+  <div class="flip-container" id="flipContainer">
+    <div class="flipper">
+      <div class="front">
+        <div class="header-row">
+          <h3 class="popup-title">Resume Tailor</h3>
+          <label class="theme-toggle" for="themeToggle">
+            <input id="themeToggle" type="checkbox" aria-label="Toggle dark mode" />
+            <span id="themeToggleLabel">Light mode</span>
+          </label>
+        </div>
 
-          <div class="section-grid">
-            <section class="premium-panel action-panel">
-              <div class="panel-header">
-                <div>
-                  <p class="section-kicker">Resume actions</p>
-                  <h2 class="panel-title">Upload and generate</h2>
-                </div>
-              </div>
-              <div class="field-group">
-                <label class="label" for="resumeUpload">Resume file</label>
-                <div class="upload-box">
-                  <input type="file" id="resumeUpload" accept=".docx,.pdf" />
-                  <button id="uploadBtn" class="action action-primary">Upload</button>
-                </div>
-              </div>
-              <div class="button-stack compact-actions">
-                <button id="tailorBtn" class="action action-primary">Tailor Resume</button>
-                <button id="appliedBtn" class="action action-secondary">Mark Applied</button>
-              </div>
-              <div id="downloads" class="button-row utility-row">
-                <button id="downloadDocxBtn" class="action action-secondary">Download DOCX</button>
-                <button id="downloadPdfBtn" class="action action-secondary">Download PDF</button>
-              </div>
-            </section>
+        <div class="label">Upload Resume File</div>
+        <div class="upload-box">
+          <input type="file" id="resumeUpload" accept=".docx,.pdf" />
+          <button id="uploadBtn">Upload</button>
+        </div>
 
-            <section class="premium-panel content-panel">
-              <div class="panel-header">
-                <div>
-                  <p class="section-kicker">Job description</p>
-                  <h2 class="panel-title">Capture the target role</h2>
-                </div>
-              </div>
-              <div class="field-group split-fields">
-                <div>
-                  <label class="label" for="company">Company</label>
-                  <input id="company" type="text" placeholder="Company" />
-                </div>
-                <div>
-                  <label class="label" for="role">Role</label>
-                  <input id="role" type="text" placeholder="Role" />
-                </div>
-              </div>
-              <div class="field-group">
-                <label class="label" for="jdText">Job description</label>
-                <textarea id="jdText" placeholder="Paste JD or use Get JD"></textarea>
-              </div>
-              <div class="button-row utility-row">
-                <button id="getJD" class="action action-secondary">Get JD</button>
-                <button id="checkMatchBtn" class="action action-primary">Check Match</button>
-              </div>
-            </section>
+        <div class="label">Company & Role</div>
+        <div class="row">
+          <input id="company" type="text" placeholder="Company" />
+          <input id="role" type="text" placeholder="Role" />
+        </div>
 
-            <section class="premium-panel feedback-panel">
-              <div class="panel-header">
-                <div>
-                  <p class="section-kicker">Status and match</p>
-                  <h2 class="panel-title">Readiness insights</h2>
-                </div>
-              </div>
-              <div id="matchResult" class="info-surface">Match Score: Not checked yet</div>
-              <div id="status" class="status-surface">🔵 Ready</div>
-            </section>
+        <div class="label">Job Description</div>
+        <textarea id="jdText" placeholder="Paste JD or use 'Get JD'"></textarea>
+        <div class="row">
+          <button id="getJD" class="action">Get JD</button>
+          <button id="checkMatchBtn" class="action">Check Match</button>
+        </div>
 
-            <section class="premium-panel chat-panel">
-              <div class="panel-header">
-                <div>
-                  <p class="section-kicker">Chat mode</p>
-                  <h2 class="panel-title">Ask resume questions</h2>
-                </div>
-                <button id="flipBtn" class="action action-ghost">↔ Flip</button>
-              </div>
-              <p class="chat-hint">Use the dedicated chat side for resume-grounded answers.</p>
-            </section>
-          </div>
-        </section>
+        <div id="matchResult">Match Score: Not checked yet</div>
 
-        <section class="back popup-face">
-          <div class="premium-panel chat-back-panel">
-            <div class="panel-header">
-              <div>
-                <p class="section-kicker">Assistant</p>
-                <h2 class="panel-title">Resume chat</h2>
-              </div>
-              <button id="flipBtnBack" class="action action-ghost chat-back-button" aria-hidden="true" tabindex="-1">↔ Flip</button>
-            </div>
-            <div id="chatBox" class="chat-box"></div>
-            <div class="chat-input-shell">
-              <input id="chatInput" type="text" placeholder="Ask something..." />
-            </div>
-          </div>
-        </section>
+        <div class="row">
+          <button id="tailorBtn" class="action">Tailor</button>
+          <button id="appliedBtn" class="action">Applied</button>
+        </div>
+
+        <div id="downloads" class="row">
+          <button id="downloadDocxBtn" class="action">DOCX</button>
+          <button id="downloadPdfBtn" class="action">PDF</button>
+        </div>
+
+        <div id="status">🔵 Ready</div>
+      </div>
+
+      <div class="back">
+        <div id="chatBox" class="chat-box"></div>
+        <div class="chat-input">
+          <input id="chatInput" type="text" placeholder="Ask something..." />
+        </div>
       </div>
     </div>
   </div>
 
+  <button id="flipBtn" style="margin-top:4px;width:100%;" class="action">↔ Flip</button>
   <script src="popup.js"></script>
 </body>
 </html>
