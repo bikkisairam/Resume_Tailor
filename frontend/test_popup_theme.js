@@ -10,6 +10,38 @@ const THEME_ATTRIBUTE = "data-theme";
 const LIGHT_THEME = "light";
 const DARK_THEME = "dark";
 const STORAGE_KEY = "popupTheme";
+const REQUIRED_IDS = [
+  "getJD",
+  "tailorBtn",
+  "downloadDocxBtn",
+  "downloadPdfBtn",
+  "uploadBtn",
+  "resumeUpload",
+  "status",
+  "appliedBtn",
+  "checkMatchBtn",
+  "matchResult",
+  "downloads",
+  "flipBtn",
+  "flipContainer",
+  "chatBox",
+  "chatInput",
+  "company",
+  "role",
+  "jdText",
+  "themeToggle",
+  "themeToggleLabel"
+];
+const PREMIUM_LAYOUT_MARKERS = [
+  'class="popup-shell"',
+  'class="premium-panel hero-panel"',
+  'class="premium-panel action-panel"',
+  'class="premium-panel content-panel"',
+  'class="premium-panel feedback-panel"',
+  'class="premium-panel chat-panel"',
+  'class="section-grid"',
+  'class="header-row premium-header"'
+];
 
 class FakeClassList {
   constructor() {
@@ -77,30 +109,8 @@ class FakeElement {
 
 function buildEnvironment(savedTheme) {
   const elements = new Map();
-  const requiredIds = [
-    "getJD",
-    "tailorBtn",
-    "downloadDocxBtn",
-    "downloadPdfBtn",
-    "uploadBtn",
-    "resumeUpload",
-    "status",
-    "appliedBtn",
-    "checkMatchBtn",
-    "matchResult",
-    "downloads",
-    "flipBtn",
-    "flipContainer",
-    "chatBox",
-    "chatInput",
-    "company",
-    "role",
-    "jdText",
-    "themeToggle",
-    "themeToggleLabel"
-  ];
 
-  requiredIds.forEach((id) => {
+  REQUIRED_IDS.forEach((id) => {
     elements.set(id, new FakeElement(id));
   });
 
@@ -188,7 +198,6 @@ function buildEnvironment(savedTheme) {
   return {
     context,
     body,
-    document,
     elements,
     fetchCalls,
     storageSetCalls,
@@ -202,12 +211,23 @@ async function flushMicrotasks() {
   await Promise.resolve();
 }
 
-async function test_theme_toggle_control_present() {
+async function test_popup_html_contains_all_required_ids() {
   const popupHtml = fs.readFileSync(POPUP_HTML_PATH, "utf8");
-  assert.ok(popupHtml.includes('id="themeToggle"'));
+
+  REQUIRED_IDS.forEach((id) => {
+    assert.ok(popupHtml.includes(`id="${id}"`), `Expected popup.html to include id="${id}"`);
+  });
 }
 
-async function test_apply_dark_theme_updates_root_theme_state() {
+async function test_popup_html_contains_premium_layout_sections() {
+  const popupHtml = fs.readFileSync(POPUP_HTML_PATH, "utf8");
+
+  PREMIUM_LAYOUT_MARKERS.forEach((marker) => {
+    assert.ok(popupHtml.includes(marker), `Expected popup.html to include ${marker}`);
+  });
+}
+
+async function test_apply_theme_dark_updates_ui_and_label() {
   const { context, body, elements } = buildEnvironment();
   context.applyTheme(DARK_THEME);
 
@@ -216,7 +236,7 @@ async function test_apply_dark_theme_updates_root_theme_state() {
   assert.strictEqual(elements.get("themeToggleLabel").textContent, "Dark mode");
 }
 
-async function test_apply_light_theme_restores_root_theme_state() {
+async function test_apply_theme_light_restores_ui_and_label() {
   const { context, body, elements } = buildEnvironment(DARK_THEME);
   context.applyTheme(LIGHT_THEME);
 
@@ -225,35 +245,38 @@ async function test_apply_light_theme_restores_root_theme_state() {
   assert.strictEqual(elements.get("themeToggleLabel").textContent, "Light mode");
 }
 
-async function test_saved_theme_restored_on_popup_init() {
+async function test_saved_theme_restores_on_init() {
   const { body, elements } = buildEnvironment(DARK_THEME);
   await flushMicrotasks();
 
   assert.strictEqual(body.getAttribute(THEME_ATTRIBUTE), DARK_THEME);
   assert.strictEqual(elements.get("themeToggle").checked, true);
+  assert.strictEqual(elements.get("themeToggleLabel").textContent, "Dark mode");
 }
 
-async function test_no_saved_theme_defaults_to_light() {
+async function test_default_theme_is_light() {
   const { body, elements } = buildEnvironment();
   await flushMicrotasks();
 
   assert.strictEqual(body.getAttribute(THEME_ATTRIBUTE), LIGHT_THEME);
   assert.strictEqual(elements.get("themeToggle").checked, false);
+  assert.strictEqual(elements.get("themeToggleLabel").textContent, "Light mode");
 }
 
-async function test_theme_toggle_persists_selection() {
-  const { elements, storageSetCalls, storageState } = buildEnvironment();
+async function test_theme_change_persists_to_storage() {
+  const { body, elements, storageSetCalls, storageState } = buildEnvironment();
   const themeToggle = elements.get("themeToggle");
   themeToggle.checked = true;
 
   themeToggle.dispatch("change", { target: themeToggle });
   await flushMicrotasks();
 
+  assert.strictEqual(body.getAttribute(THEME_ATTRIBUTE), DARK_THEME);
   assert.deepStrictEqual(storageSetCalls[0], { [STORAGE_KEY]: DARK_THEME });
   assert.strictEqual(storageState[STORAGE_KEY], DARK_THEME);
 }
 
-async function test_theme_toggle_does_not_call_backend() {
+async function test_theme_toggle_does_not_call_fetch() {
   const { elements, fetchCalls } = buildEnvironment();
   const themeToggle = elements.get("themeToggle");
   themeToggle.checked = true;
@@ -264,15 +287,38 @@ async function test_theme_toggle_does_not_call_backend() {
   assert.strictEqual(fetchCalls.length, 0);
 }
 
+async function test_popup_controls_remain_present_after_ui_refresh() {
+  const { elements } = buildEnvironment();
+
+  REQUIRED_IDS.forEach((id) => {
+    assert.ok(elements.get(id), `Expected fake DOM to include ${id}`);
+  });
+
+  assert.strictEqual(elements.get("downloads").style.display, "");
+  elements.get("tailorBtn").dispatch("click");
+  assert.strictEqual(typeof elements.get("flipBtn").listeners.click, "function");
+  assert.strictEqual(typeof elements.get("chatInput").listeners.keypress, "function");
+}
+
+async function test_show_downloads_uses_flex_display() {
+  const { context, elements } = buildEnvironment();
+  context.showDownloads();
+
+  assert.strictEqual(elements.get("downloads").style.display, DISPLAY_FLEX);
+}
+
 async function runTests() {
   const tests = [
-    test_theme_toggle_control_present,
-    test_apply_dark_theme_updates_root_theme_state,
-    test_apply_light_theme_restores_root_theme_state,
-    test_saved_theme_restored_on_popup_init,
-    test_no_saved_theme_defaults_to_light,
-    test_theme_toggle_persists_selection,
-    test_theme_toggle_does_not_call_backend
+    test_popup_html_contains_all_required_ids,
+    test_popup_html_contains_premium_layout_sections,
+    test_apply_theme_dark_updates_ui_and_label,
+    test_apply_theme_light_restores_ui_and_label,
+    test_saved_theme_restores_on_init,
+    test_default_theme_is_light,
+    test_theme_change_persists_to_storage,
+    test_theme_toggle_does_not_call_fetch,
+    test_popup_controls_remain_present_after_ui_refresh,
+    test_show_downloads_uses_flex_display
   ];
 
   for (const test of tests) {
