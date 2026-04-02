@@ -3,43 +3,41 @@
 ## Build & Run
 
 ### Backend
-Source: `backend/app.py`, dependencies in `backend/requirements.txt`.
+Source: `backend/requirements.txt`, `backend/app.py`
 
-Local setup:
+Install dependencies:
 ```bash
 cd backend
 python -m venv .venv
-# macOS/Linux
+# Linux/macOS
 source .venv/bin/activate
 # Windows
 .venv\Scripts\activate
 
+pip install --upgrade pip
 pip install -r requirements.txt
+```
+
+Run locally:
+```bash
 python app.py
 ```
 
-Expected runtime: Flask app on the port defined inside `backend/app.py` (README implies direct `python app.py` startup; no WSGI server config is present).
-
-Production build:
-- There is no `Dockerfile`, `pyproject.toml`, `setup.py`, or pinned lockfile.
-- Current production packaging is effectively:
-```bash
-pip install -r backend/requirements.txt
-python backend/app.py
-```
-Recommended production launcher:
-```bash
-gunicorn app:app --chdir backend --bind 0.0.0.0:8000
-```
-if `backend/app.py` exposes `app = Flask(...)`.
+Notes:
+- Flask app entrypoint is `backend/app.py`.
+- LLM/document dependencies come from `backend/requirements.txt`:
+  - `Flask`
+  - `Flask-Cors`
+  - `google-generativeai`
+  - `python-docx`
+  - `PyPDF2`
+  - `openpyxl`
+  - `docx2pdf`
 
 ### Frontend
-This is a Chrome extension, not a bundled web app.
-Files:
-- `frontend/manifest.json`
-- `frontend/popup.html`
-- `frontend/popup.js`
-- `frontend/scraper.js`
+Source: `frontend/manifest.json`, `frontend/popup.html`, `frontend/popup.js`
+
+This is a Chrome extension, not a bundled web app. No npm build is defined in the repo.
 
 Run locally:
 1. Open `chrome://extensions`
@@ -47,218 +45,273 @@ Run locally:
 3. Click **Load unpacked**
 4. Select the `frontend/` directory
 
-Build for production:
-- No Node/npm build exists.
-- Production artifact is the unpacked extension folder or a zipped package of `frontend/`.
-
-Example package step:
+### Frontend test
+There is one Node-based test script:
 ```bash
-zip -r resume-tailor-extension.zip frontend/
+node frontend/test_popup_theme.js
 ```
+
+This validates theme behavior in `frontend/popup.js` against `frontend/popup.html`.
+
+### Production build
+No formal production build pipeline exists in the repository:
+- Backend is interpreted Python; deploy source plus `requirements.txt`
+- Frontend ships as static extension files from `frontend/`
+
+If packaging the extension for release, zip the `frontend/` directory contents after validation.
+
+---
 
 ## CI/CD Pipeline
 
-There are no CI/CD config files in the repo (`.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, etc. are absent), so currently no automated pipeline is defined.
+## Current state
+No CI workflow files are present in the provided tree (`.github/workflows/*` is absent). That means no repository-native automated pipeline is currently defined.
 
-### Minimum PR checks to add
-On every PR:
-1. **Python dependency install**
+## Recommended PR checks
+Given the actual repo contents, every PR should run:
+
+1. **Python dependency install smoke test**
    ```bash
    pip install -r backend/requirements.txt
    ```
-2. **Python syntax validation**
+
+2. **Backend syntax validation**
    ```bash
    python -m py_compile backend/app.py backend/parser.py backend/tailor.py backend/writer.py
    ```
-3. **Chrome extension manifest validation**
-   - Check `frontend/manifest.json` is valid JSON
+
+3. **Frontend test**
    ```bash
-   python -c "import json; json.load(open('frontend/manifest.json'))"
+   node frontend/test_popup_theme.js
    ```
-4. **Basic smoke packaging**
-   - Zip frontend artifact
-   - Optionally start Flask app in CI and hit health endpoint if one exists in `backend/app.py`
 
-### Deployment trigger
-Because no pipeline exists, deployment is manual today:
-- Backend: deploy after merge to main by restarting the Flask process/service
-- Frontend: manually reload unpacked extension or publish package to Chrome Web Store if that process is later adopted
+4. **Extension manifest validation**
+   - At minimum, parse `frontend/manifest.json` as JSON.
 
-Recommended trigger policy:
-- **PRs**: lint/syntax/smoke only
-- **Push to `main` / tagged release**: deploy backend
-- **Version bump in `frontend/manifest.json`**: package extension release
+## Deployment trigger
+No deployment automation is defined in-repo. If adding CI/CD, use:
+- **PRs**: run checks only
+- **Push to `main` / release tag**: deploy backend
+- **Tagged release**: package extension zip from `frontend/`
+
+A practical pipeline would be:
+- Trigger on `pull_request` to `main`
+- Trigger deployment on `push` to `main` after checks pass
+
+---
 
 ## Infrastructure
 
-## Containers
-- No containerization files exist.
-- No `Dockerfile` / `docker-compose.yml` present.
+## Application topology
+This service has two runtime parts:
 
-Recommended container split:
-1. `backend` Flask API container
-2. Optional reverse proxy container (nginx) if exposing publicly
+1. **Chrome Extension**
+   - Static files in `frontend/`
+   - Runs in user browser
+   - Requires Chrome Extension Manifest V3 (`frontend/manifest.json`)
+
+2. **Flask Backend**
+   - Python service in `backend/app.py`
+   - Likely exposes APIs consumed by `frontend/popup.js`
+   - Uses Gemini API, file parsing, DOCX/PDF generation, and Excel write operations
+
+## Containers
+No Dockerfile or container manifests are present. Containerization is not yet defined in-repo.
+
+Recommended container baseline for backend:
+- Python 3.11 slim image
+- Install OS packages needed by `docx2pdf` only if PDF conversion is truly required in Linux runtime
+- Mount writable volume for generated files if backend stores outputs on disk
+
+Important risk:
+- `docx2pdf` often depends on Microsoft Word on Windows/macOS and is unreliable/not viable in typical Linux containers. PDF generation must be validated in target environment before production rollout.
 
 ## Cloud services
-Observed external dependency:
-- **Google Gemini API** via `google-generativeai` in:
-  - `backend/parser.py`
-  - `backend/tailor.py`
-  - likely also `backend/app.py`
+Inferred required external services:
+- **Gemini API** via `google-generativeai`
+- Optional object/file storage if generated resumes are persisted externally
+- No explicit managed DB is present in repo
 
 ## Databases / storage
-No traditional database is present in the visible files.
+No database config files are present.
 
-Current storage appears file-based:
-- Resume JSON output: `resume_fixed.json`
-- Tailored resume JSON: `tailored_resume.json`
-- Generated DOCX: `Tailored_Resume.docx`
-- Excel tracker mentioned in `README.md` via `openpyxl`
-- Potential PDF generation via `docx2pdf`
+Actual storage visible from code and README:
+- JSON files on local disk
+  - `resume_fixed.json`
+  - `tailored_resume.json`
+- Generated DOCX on local disk
+  - `Tailored_Resume.docx`
+- Excel tracker via `openpyxl` per README
+- Uploaded resume files likely handled by backend filesystem
 
-Operational implication:
-- Backend likely writes to local filesystem
-- Container deployments need a writable volume if outputs must persist across restarts
-- Horizontal scaling will be unsafe unless output storage is externalized
+This means current implementation is primarily **filesystem-backed**, not DB-backed.
 
 ## Environment variables required
-The code currently hardcodes API keys in source:
-- `backend/parser.py`:
-  ```python
-  API_KEY = "Gemini_API_KEY"
-  ```
-- `backend/tailor.py`:
-  ```python
-  genai.configure(api_key="Gemini_API")
-  ```
+The code currently hardcodes placeholder Gemini keys in:
+- `backend/parser.py`
+- `backend/tailor.py`
 
-These should be replaced with env vars, e.g.:
-- `GEMINI_API_KEY` — required
-- `FLASK_ENV` — optional
-- `PORT` — if `backend/app.py` supports it
-- `OUTPUT_DIR` — recommended for generated JSON/DOCX/PDF files
-- `CORS_ALLOWED_ORIGINS` — recommended because `Flask-Cors` is used
-- `TRACKER_FILE` — recommended if Excel tracker path is configurable
+These should be replaced with environment variables, e.g.:
+```bash
+GEMINI_API_KEY=<key>
+FLASK_ENV=production
+PORT=5000
+```
 
-If `docx2pdf` is used in production, note it may require Microsoft Word on Windows/macOS and is typically unreliable in Linux containers.
+Potentially required by `backend/app.py` as well:
+- `CORS_ALLOWED_ORIGINS`
+- `OUTPUT_DIR`
+- `UPLOAD_DIR`
+- `TRACKER_FILE`
+
+Because `backend/app.py` content was not included, verify its actual config reads before deployment.
+
+---
 
 ## Observability
 
-## Logging setup
-No logging config files are present.
-Visible Python modules use:
-- `print(...)` in `parser.py`, `tailor.py`, `writer.py`
-- likely ad hoc Flask logging in `backend/app.py`
+## Logging
+No structured logging config is visible in provided files.
+Current code uses simple `print()` in scripts such as:
+- `backend/parser.py`
+- `backend/tailor.py`
+- `backend/writer.py`
 
-Current state:
-- stdout/stderr logging only
-- no structured logging
-- no log rotation config
-- no correlation/request IDs
+Recommended:
+- Standardize backend logging with Python `logging`
+- Emit request logs, Gemini API errors, file generation failures, and JSON parse failures
+- Log to stdout for container/cloud collection
 
-Recommended baseline:
-- Run backend with stdout capture through systemd/Docker/cloud runtime
-- Replace `print` with Python `logging`
-- Log request path, status code, latency, Gemini API failures, file write failures
+Frontend/browser observability:
+- `frontend/scraper.js` uses `console.error("LinkedIn scraping error:", err);`
+- Extension errors will only be visible in extension/page devtools unless explicitly reported
 
 ## Metrics
-No metrics stack is configured.
-No Prometheus/OpenTelemetry instrumentation is present.
+No metrics stack is defined.
 
-Recommended app metrics:
-- request count / latency / error rate
-- Gemini API call count / failures / latency
-- resume parse failures
-- DOCX/PDF generation failures
-- Excel tracker write failures
+Recommended minimum backend metrics:
+- request count / latency by endpoint
+- Gemini call count / latency / failure rate
+- file generation success/failure counts
+- upload parse success/failure counts
 
 ## Health checks
-No health endpoint is visible in listed files, though one may exist in `backend/app.py`.
-Recommended:
-- `GET /healthz` → returns 200 if process is alive
-- `GET /readyz` → checks Gemini config, writable output directory, optional tracker file accessibility
+No health endpoint is visible from the provided files, though `backend/app.py` may contain one.
 
-If containerized, wire:
-```bash
-curl -f http://localhost:8000/healthz
-```
+Recommended:
+- Add `GET /healthz` returning 200 with dependency-light response
+- Add `GET /readyz` if startup or external API readiness matters
+
+For deployment, wire load balancer/container health checks to `/healthz`.
 
 ## Alerting
-No alerting configuration exists.
+No alerting config exists.
 
 Recommended alerts:
-- backend process down / healthcheck failing
-- sustained 5xx rate
-- Gemini API auth failures
-- filesystem write failures
-- PDF generation failures if `docx2pdf` is enabled
-- abnormal latency on tailor/match endpoints
+- Backend unavailable / health check failing
+- Error rate spike on tailor/upload/download endpoints
+- Gemini API failure spike or quota exhaustion
+- Disk usage growth if generated files remain on local filesystem
+- Excel tracker write failures if “Applied” depends on a single local file
+
+---
 
 ## Deployment Risks
 
-1. **Hardcoded secrets**
-   - `backend/parser.py` and `backend/tailor.py` contain placeholder API keys in source.
-   - Must be moved to environment variables before any shared deployment.
+## 1. Hardcoded secrets
+Files:
+- `backend/parser.py`
+- `backend/tailor.py`
 
-2. **File-based persistence**
-   - Outputs such as `resume_fixed.json`, `tailored_resume.json`, and `Tailored_Resume.docx` are local files.
-   - In containers/serverless, these may be ephemeral.
-   - Concurrent requests may overwrite each other if filenames are static.
+Risk:
+- API keys are currently placeholder strings in source
+- Real keys must never be committed
+- Deployment will fail if env-based secret injection is not implemented
 
-3. **No pinned dependencies**
-   - `backend/requirements.txt` uses broad `>=` ranges.
-   - Builds are not reproducible; upstream library changes may break production unexpectedly.
+## 2. Filesystem coupling
+The backend scripts read/write fixed filenames:
+- `resume_fixed.json`
+- `tailored_resume.json`
+- `Tailored_Resume.docx`
 
-4. **No automated tests**
-   - PR safety is low.
-   - Breaking changes in `backend/app.py` routes or extension-to-backend contract may go undetected.
+Risk:
+- Concurrent users can overwrite each other’s files
+- Stateless/containerized deployments will lose files on restart unless persistent storage is mounted
+- Multi-replica deployments are unsafe without shared storage or per-request temp paths
 
-5. **PDF generation portability**
-   - `docx2pdf` often depends on OS-specific components.
-   - Linux CI/containers may fail to generate PDFs even if DOCX generation works.
+## 3. PDF generation portability
+Dependency:
+- `docx2pdf`
 
-6. **Schema drift**
-   - `writer.py` expects specific JSON keys like:
-     - `Details`
-     - `Work Experience`
-     - `Project Experience`
-     - `Education`
-     - `Achievements and Certifications`
-   - LLM output from `tailor.py` must preserve exact schema or document generation will break.
+Risk:
+- Often incompatible with Linux server/container environments
+- Production PDF generation may fail even if local Windows dev works
 
-7. **Potential migration risk in `backend/app.py`**
-   - Since `app.py` content is not fully shown, verify:
-     - upload paths
-     - CORS configuration
-     - route names used by `frontend/popup.js`
-     - any Excel tracker file paths
-     - whether port/debug mode is hardcoded
+## 4. Schema drift
+Files:
+- `backend/parser.py`
+- `backend/writer.py`
 
-8. **Extension host permissions**
-   - `frontend/manifest.json` restricts host permissions to job sites.
-   - If new sites are supported, manifest updates are required and may need extension republishing.
+Observed mismatch:
+- Parser’s Education schema does not include `GPA`
+- Writer optionally reads `GPA`
 
-9. **Environment-specific config**
-   Watch for:
-   - Gemini API key presence
-   - writable filesystem path
-   - OS support for `docx2pdf`
-   - Chrome extension backend base URL inside `frontend/popup.js`
-   - CORS allowed origins between extension and Flask backend
+Risk:
+- Non-fatal today, but schema changes across parser/tailor/writer can break rendering or produce incomplete output
 
-## Recommended Immediate Next Steps
+## 5. LLM output fragility
+Files:
+- `backend/parser.py`
+- `backend/tailor.py`
 
-1. Add:
-   - `Dockerfile`
-   - `.github/workflows/ci.yml`
-   - `.env.example`
-2. Move Gemini keys to `GEMINI_API_KEY`
-3. Add unique per-request output filenames
-4. Add `/healthz`
-5. Pin dependencies in `backend/requirements.txt`
-6. Verify `frontend/popup.js` backend API URL and document it explicitly
-7. Add smoke tests for:
-   - upload
-   - tailor
-   - DOCX generation
-   - match score endpoint
+Risk:
+- Gemini may return invalid JSON
+- `tailor.py` raises on JSON parse failure
+- Production requests can fail intermittently without retry/validation strategy
+
+## 6. No formal migration system
+No database migrations exist because no DB layer is defined.
+However, there is still a data compatibility risk:
+- JSON schema changes across releases
+- Excel tracker column changes
+- generated document format changes
+
+Treat these as “schema migrations” even without a database.
+
+## 7. Environment-specific config
+Watch closely:
+- Gemini API key presence and quota
+- OS/runtime support for `docx2pdf`
+- writable directories for uploads and generated files
+- CORS behavior in Flask for Chrome extension origin
+- Chrome extension host permissions in `frontend/manifest.json`
+
+## 8. Extension/backend contract changes
+Risk:
+- `frontend/popup.js` likely expects specific backend endpoints and response shapes from `backend/app.py`
+- Any backend API change is effectively a breaking change for already-installed extension versions
+
+Recommended release discipline:
+- version backend endpoints
+- version extension package
+- deploy backward-compatible backend changes before publishing updated extension
+
+--- 
+
+## Suggested minimal CI job
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+python -m py_compile backend/app.py backend/parser.py backend/tailor.py backend/writer.py
+node frontend/test_popup_theme.js
+python -c "import json; json.load(open('frontend/manifest.json'))"
+```
+
+## Suggested minimal deploy procedure
+1. Inject `GEMINI_API_KEY`
+2. Install `backend/requirements.txt`
+3. Start `python backend/app.py`
+4. Verify health endpoint or manual smoke test
+5. Load/test extension from `frontend/`
+6. Confirm upload, tailor, DOCX generation, and match score flows end-to-end
