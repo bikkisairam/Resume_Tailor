@@ -4,84 +4,213 @@
 
 ### Backend
 - **Python**
-- **Flask** via `backend/app.py`
-- **Flask-Cors** for extension/backend cross-origin access
-- **google-generativeai** for Gemini calls in:
-  - `backend/parser.py`
-  - `backend/tailor.py`
-  - likely `backend/app.py` for match score/chat/tailoring endpoints
-- **python-docx** for DOCX generation in `backend/writer.py`
-- **PyPDF2** for PDF resume text extraction in `backend/parser.py`
-- **openpyxl** listed in `backend/requirements.txt` and referenced by README for applied-job Excel tracking
-- **docx2pdf** listed in `backend/requirements.txt`, likely used by `backend/app.py` for PDF export
+- **Flask** and **Flask-Cors** (`backend/requirements.txt`)
+- **Google Gemini SDK** via `google-generativeai`
+- **python-docx** for DOCX generation and formatting (`backend/writer.py`)
+- **PyPDF2** for resume PDF text extraction (`backend/parser.py`)
+- **openpyxl** for Excel tracking support per README / backend requirements
+- **docx2pdf** for PDF export support per README / backend requirements
 
 ### Frontend
-- **Chrome Extension Manifest V3**
-- **Plain JavaScript**
-  - `frontend/popup.js`
-  - `frontend/scraper.js`
-- **HTML/CSS**
-  - `frontend/popup.html`
-  - `frontend/style.css`
-- Chrome APIs:
-  - `chrome.runtime.sendMessage`
-  - likely `chrome.scripting` / `chrome.tabs` from `popup.js`
-- Target sites declared in `frontend/manifest.json`:
-  - LinkedIn
-  - Indeed
-  - Glassdoor
-  - Monster
-  - Dice
+- **Chrome Extension (Manifest V3)** (`frontend/manifest.json`)
+- **Vanilla JavaScript** (`frontend/popup.js`, `frontend/scraper.js`)
+- **HTML/CSS** (`frontend/popup.html`, `frontend/style.css`)
+- Chrome APIs used:
+  - `chrome.tabs`
+  - `chrome.scripting`
+  - `chrome.runtime.onMessage`
+  - `chrome.storage.local`
+
+### Testing
+- **Node.js built-in modules only** in `frontend/test_popup_theme.js`
+  - `assert`
+  - `fs`
+  - `path`
+  - `vm`
+
+---
 
 ## Architecture
 
-This is a **2-part system**:
+This repo is split into a **Flask backend** and a **Chrome extension frontend**.
 
-1. **Chrome extension UI** in `frontend/`
-2. **Flask API/backend pipeline** in `backend/`
-
-The main product flow described by the repo is:
-
-1. User uploads a resume in the extension popup
-2. Backend parses the resume into structured JSON
-3. Extension gets or pastes a JD
-4. Backend asks Gemini to tailor the resume JSON
-5. Backend renders output files (DOCX/PDF)
-6. Backend can compute match score, chat against resume content, and track applied jobs
-
-### Backend module ownership
+### Backend structure
 
 #### `backend/app.py`
-This is the backend entry point and API surface.  
-Even though contents were omitted, based on README and the rest of the repo it is the orchestration layer that likely owns:
-- Flask app creation
-- route definitions
-- request/response handling
-- calling parser/tailor/writer functionality
-- file upload handling
-- DOCX/PDF download endpoints
-- applied job tracker writes
-- match score and chat endpoints
-
-This is the file most likely to glue together:
-- `read_resume()` / JSON parsing logic from `parser.py`
-- `tailor_resume()` from `tailor.py`
-- `build_doc()` from `writer.py`
+- Main Flask server entry point.
+- Owns HTTP API endpoints the extension calls.
+- Based on README/product context, this is the orchestration layer for:
+  - resume upload/parsing
+  - tailoring
+  - match score
+  - document download
+  - applied-job tracking
+  - chat mode
+- This is the file to inspect first when tracing request flow end-to-end from `frontend/popup.js`.
 
 #### `backend/parser.py`
-Owns **resume ingestion into structured JSON**.
-Key functions:
-- `read_resume(file_path)`  
-  Extracts plain text from `.docx` or `.pdf`
-- `clean_gemini_output(output_text)`  
-  Strips Markdown code fences and validates JSON
+- Owns **resume ingestion and normalization into structured JSON**.
+- Key functions:
+  - `read_resume(file_path)`:
+    - reads `.docx` with `Document`
+    - reads `.pdf` with `PyPDF2.PdfReader`
+  - `clean_gemini_output(output_text)`
+    - strips markdown code fences
+    - validates/normalizes JSON
+- Script mode reads `RESUME_FILE`, sends prompt to Gemini, writes `resume_fixed.json`.
 
-The `__main__` block is a standalone script path:
-- reads a hardcoded resume file
-- prompts Gemini with a fixed schema
-- writes `resume_fixed.json`
+#### `backend/tailor.py`
+- Owns **LLM-based resume rewriting against a job description**.
+- Key function:
+  - `tailor_resume(resume_json: dict, job_description: str) -> dict`
+- Builds a long prompt with tailoring rules, calls Gemini, strips markdown fences, parses JSON, and returns tailored JSON.
+- Script mode reads `resume_fixed.json` and `jd.txt`, writes `tailored_resume.json`.
 
-This module establishes the canonical JSON schema used across the project:
+#### `backend/writer.py`
+- Owns **rendering tailored JSON into a formatted DOCX**.
+- Main build function:
+  - `build_doc(data: dict, out_path: Path)`
+- Section writers:
+  - `write_header`
+  - `write_summary`
+  - `write_skills`
+  - `write_experience`
+  - `write_projects`
+  - `write_education`
+  - `write_certifications`
+- Styling/layout helpers:
+  - `configure_styles`
+  - `set_margins`
+  - `add_section_heading`
+  - `add_tabbed_paragraph`
+- Script mode reads `tailored_resume.json`, writes `Tailored_Resume.docx`.
+
+### Frontend structure
+
+#### `frontend/popup.html`
+- Main extension UI.
+- Contains the controls referenced by `popup.js`, including IDs verified by tests:
+  - `getJD`
+  - `tailorBtn`
+  - `downloadDocxBtn`
+  - `downloadPdfBtn`
+  - `uploadBtn`
+  - `resumeUpload`
+  - `status`
+  - `appliedBtn`
+  - `checkMatchBtn`
+  - `matchResult`
+  - `downloads`
+  - `flipBtn`
+  - `flipContainer`
+  - `chatBox`
+  - `chatInput`
+  - `company`
+  - `role`
+  - `jdText`
+  - `themeToggle`
+  - `themeToggleLabel`
+
+#### `frontend/popup.js`
+- Main client-side controller for the popup.
+- Owns:
+  - wiring button handlers
+  - talking to backend APIs with `fetch`
+  - invoking content-script injection with `chrome.scripting.executeScript`
+  - receiving scraped JD data through `chrome.runtime.onMessage`
+  - theme persistence with `chrome.storage.local`
+  - showing/hiding download controls and status text
+- This is the frontend file most developers will touch daily.
+
+#### `frontend/scraper.js`
+- Content script injected into job pages.
+- Current implementation is **LinkedIn-specific**.
+- Extracts:
+  - company
+  - role
+  - JD text
+- Sends result back to popup with:
+  ```js
+  chrome.runtime.sendMessage({
+    type: "jd_data",
+    company,
+    role,
+    jd
+  });
+  ```
+
+#### `frontend/style.css`
+- Base popup styling.
+- Small file; likely only core/default styles. Theme behavior is mainly driven by DOM state set in `popup.js`.
+
+---
+
+## Coding Conventions
+
+## Naming patterns
+### Python
+- Functions use **snake_case**:
+  - `read_resume`
+  - `clean_gemini_output`
+  - `tailor_resume`
+  - `write_experience`
+- Module names are lowercase single-purpose files:
+  - `parser.py`
+  - `tailor.py`
+  - `writer.py`
+  - `app.py`
+- Constants are uppercase:
+  - `API_KEY`
+  - `RESUME_FILE`
+  - `OUTPUT_FILE`
+  - `INPUT_FILE`
+  - `OUTPUT_DOCX`
+
+### JavaScript
+- Variables and functions use **camelCase**:
+  - `buildEnvironment`
+  - `flushMicrotasks`
+  - `storageSetCalls`
+  - `runtimeListeners`
+- DOM nodes are commonly named with `El` suffix in scraper code:
+  - `companyEl`
+  - `roleEl`
+  - `jdEl`
+
+## Project layout rules
+- Backend logic is flat under `backend/`; there are no packages/subpackages yet.
+- Frontend extension assets are flat under `frontend/`.
+- Scripts are currently organized by responsibility, not by layers/classes:
+  - parse JSON
+  - tailor JSON
+  - write DOCX
+- There are **no shared utility modules** yet; helper logic stays local to each file.
+
+## Error handling style
+### Python
+- Mostly direct exceptions rather than custom exception types.
+- Examples:
+  - `FileNotFoundError` in `read_resume`
+  - `ValueError` for unsupported format in `read_resume`
+  - `ValueError` when Gemini JSON parsing fails in `tailor_resume`
+- Failure handling is lightweight and synchronous; no retry wrappers or structured API error objects are visible in provided modules.
+
+### JavaScript
+- Browser-side scraping uses `try/catch` and logs to console:
+  - `console.error("LinkedIn scraping error:", err);`
+- Test file uses Node `assert` and throws on failure naturally.
+
+## Logging approach
+- Backend uses simple `print(...)` status logging in script mode:
+  - `print(f"✅ Resume converted and saved as {OUTPUT_FILE}")`
+  - `print("✅ Tailored resume saved to tailored_resume.json")`
+  - `print(f"✅ DOCX saved to {OUTPUT_DOCX}")`
+- No structured logging framework is present.
+- Frontend uses `console.error(...)` for scraping failures.
+- Expect ad hoc logging rather than centralized logger configuration.
+
+## Data/schema conventions
+The JSON resume schema is centered around these top-level keys from `backend/parser.py`:
 - `Details`
 - `Summary`
 - `Skills`
@@ -90,307 +219,118 @@ This module establishes the canonical JSON schema used across the project:
 - `Education`
 - `Achievements and Certifications`
 
-#### `backend/tailor.py`
-Owns **resume tailoring via Gemini**.
-Key function:
-- `tailor_resume(resume_json: dict, job_description: str) -> dict`
+Important mismatch:
+- `backend/writer.py` reads optional `Education[].GPA`
+- `backend/parser.py` schema does **not** output `GPA`
 
-Responsibilities:
-- prompt construction for tailored summaries/skills/experience/projects
-- preserving schema shape
-- stripping Gemini code fences
-- parsing returned JSON
+Also note:
+- parser prompt requires bullet text without symbols
+- writer adds `•` when rendering DOCX
 
-The `__main__` block supports local script usage:
-- reads `resume_fixed.json`
-- reads `jd.txt`
-- writes `tailored_resume.json`
-
-#### `backend/writer.py`
-Owns **rendering tailored JSON into DOCX**.
-Key functions:
-- `configure_styles(doc)`
-- `set_margins(doc)`
-- `build_doc(data, out_path)`
-
-Section writers:
-- `write_header`
-- `write_summary`
-- `write_skills`
-- `write_experience`
-- `write_projects`
-- `write_education`
-- `write_certifications`
-
-Helpers:
-- `add_line_after`
-- `add_section_heading`
-- `add_bullets`
-- `add_tabbed_paragraph`
-
-The data contract here is the same structured JSON used by parser/tailor.  
-Notable mismatch: `write_education()` reads `GPA`, but parser schema in `parser.py` does **not** include `GPA`. So writer is tolerant of extra fields, but GPA is not part of the guaranteed input schema.
-
-### Frontend module ownership
-
-#### `frontend/popup.html`
-Main extension UI. Owns:
-- upload input: `#resumeUpload`
-- company/role inputs: `#company`, `#role`
-- JD textarea: `#jdText`
-- actions:
-  - `#uploadBtn`
-  - `#getJD`
-  - `#checkMatchBtn`
-  - `#tailorBtn`
-  - `#appliedBtn`
-  - download buttons
-- chat UI on the flip side:
-  - `#chatBox`
-  - `#chatInput`
-  - `#flipBtn`
-
-Inline CSS is doing most of the actual styling here; `style.css` appears largely unused by this HTML.
-
-#### `frontend/popup.js`
-This is the extension controller script and likely the frontend entry point in day-to-day work. It presumably owns:
-- DOM event wiring for all popup buttons
-- calls to the Flask backend
-- triggering content-script injection for JD scraping
-- status updates in `#status`
-- match score rendering in `#matchResult`
-- showing/hiding `#downloads`
-- chat request/response handling
-- flip interaction
-
-Because nearly every user action starts here, this is one of the primary files developers will touch.
-
-#### `frontend/scraper.js`
-Owns **page-level JD scraping**, currently with explicit LinkedIn selectors.
-It extracts:
-- `company`
-- `role`
-- `jd`
-
-Then sends:
-```js
-chrome.runtime.sendMessage({
-  type: "jd_data",
-  company,
-  role,
-  jd
-});
-```
-
-This is isolated from popup logic, which is good: popup triggers execution, scraper focuses only on DOM extraction.
-
-#### `frontend/manifest.json`
-Owns extension configuration:
-- MV3 metadata
-- permissions:
-  - `scripting`
-  - `activeTab`
-- allowed hosts for job boards
-- popup entry point: `popup.html`
-
-## Coding Conventions
-
-## Naming patterns
-
-### Python
-- Mostly **snake_case** for functions and locals:
-  - `read_resume`
-  - `clean_gemini_output`
-  - `tailor_resume`
-  - `build_doc`
-  - `write_summary`
-- Constants are **UPPER_SNAKE_CASE**:
-  - `API_KEY`
-  - `RESUME_FILE`
-  - `OUTPUT_FILE`
-  - `INPUT_FILE`
-  - `OUTPUT_DOCX`
-
-### JavaScript / frontend
-- DOM variables and locals use **camelCase**:
-  - `companyEl`
-  - `roleEl`
-  - `jdEl`
-  - `flipContainer`
-  - `matchResult`
-- Element IDs in HTML are also camelCase:
-  - `uploadBtn`
-  - `checkMatchBtn`
-  - `downloadDocxBtn`
-
-## Project layout rules
-Top-level split is simple and flat:
-- `backend/` for Python server and processing scripts
-- `frontend/` for Chrome extension assets
-
-There are no nested packages, no tests directory, and no build system.  
-Most backend modules are single-purpose scripts with reusable functions plus a `__main__` block.
-
-## Data shape conventions
-The project relies on a shared resume JSON schema. Exact key names matter because both tailoring and writing use them directly:
-- `"Details"`
-- `"Summary"`
-- `"Skills"`
-- `"Work Experience"`
-- `"Project Experience"`
-- `"Education"`
-- `"Achievements and Certifications"`
-
-Nested keys also use title-cased strings with spaces:
-- `"Company Name"`
-- `"Bullet Points"`
-- `"Tech Stack"`
-
-That means schema changes are high-impact across:
-- Gemini prompts in `parser.py` and `tailor.py`
-- all writer functions in `writer.py`
-- probably route payloads in `app.py`
-
-## Error handling style
-Current error handling is lightweight and exception-driven.
-
-Examples:
-- `parser.py`
-  - raises `FileNotFoundError`
-  - raises `ValueError` on unsupported file type
-  - falls back to saving raw Gemini output when JSON validation fails
-- `tailor.py`
-  - raises `ValueError` if Gemini response cannot be parsed as JSON
-  - handles `UnicodeDecodeError` when reading `jd.txt`
-- `scraper.js`
-  - wraps scraping in `try/catch`
-  - logs to console via `console.error(...)`
-
-The style is pragmatic rather than centralized. There is no custom exception hierarchy and no evidence of shared error wrappers.
-
-## Logging approach
-Logging is mostly **print-based** in Python scripts and **console.error** in frontend scraping.
-Examples:
-- `print(f"✅ Resume converted and saved as {OUTPUT_FILE}")`
-- `print("✅ Tailored resume saved to tailored_resume.json")`
-- `print(f"✅ DOCX saved to {OUTPUT_DOCX}")`
-- `console.error("LinkedIn scraping error:", err)`
-
-No structured logging framework is present.  
-For backend API routes in `app.py`, expect similar simple logging unless that file introduces Flask logger usage.
-
-## Configuration conventions
-Secrets are currently hardcoded placeholders:
-- `API_KEY = "Gemini_API_KEY"` in `parser.py`
-- `genai.configure(api_key="Gemini_API")` in `tailor.py`
-
-This codebase has **not** been normalized around environment variables yet.
+---
 
 ## Testing Approach
 
-There are **no test files** in the provided tree and no testing dependencies in `backend/requirements.txt`.
+## Frameworks used
+- There is **no Python test suite** shown in the provided tree.
+- Frontend has a **custom Node-based test script**:
+  - `frontend/test_popup_theme.js`
 
-So current testing is effectively:
-- **manual UI testing** through the Chrome extension popup
-- **manual API testing** by running `backend/app.py`
-- **manual script testing** via:
-  - `python backend/parser.py`
-  - `python backend/tailor.py`
-  - `python backend/writer.py`
+## Current test coverage
+### Frontend unit-style tests
+`frontend/test_popup_theme.js` tests popup theme behavior by:
+- creating fake DOM elements (`FakeElement`, `FakeClassList`)
+- mocking Chrome extension APIs
+- loading `frontend/popup.js` into a VM context
+- asserting UI and storage behavior
 
-### Current practical test split
-- **Unit tests:** none present
-- **Integration tests:** none automated; manual integration across popup ↔ Flask ↔ Gemini ↔ DOCX generation
-- **E2E tests:** none automated; likely done by loading the extension and exercising the workflow on LinkedIn job pages
+Covered theme behaviors:
+- theme toggle control exists in `popup.html`
+- `applyTheme("dark")` updates body attribute and label
+- `applyTheme("light")` restores state
+- saved theme restores on popup init
+- default theme is light
+- theme change persists to `chrome.storage.local`
+- theme toggle does not trigger backend `fetch`
 
-### How to run current manual checks
+This is closer to a **unit/integration hybrid** for popup behavior.
 
-#### Backend server
+## Unit vs integration vs e2e
+- **Unit:** minimal; mostly frontend theme logic in isolation
+- **Integration:** popup script + fake DOM + fake Chrome APIs in `test_popup_theme.js`
+- **E2E:** none present
+- **Backend API/integration tests:** none present in provided files
+
+## How to run tests
+From repo root:
 ```bash
-cd backend
-pip install -r requirements.txt
-python app.py
+node frontend/test_popup_theme.js
 ```
 
-#### Parser script
-```bash
-cd backend
-python parser.py
-```
+There is no visible `package.json`, so tests rely on having Node available and use only built-in modules.
 
-#### Tailor script
-```bash
-cd backend
-python tailor.py
-```
-
-#### Writer script
-```bash
-cd backend
-python writer.py
-```
-
-#### Extension
-- Open Chrome extensions page
-- Enable Developer Mode
-- Load unpacked extension from `frontend/`
-- Open `popup.html` through the extension action
-- Test JD scraping on a LinkedIn job page
+---
 
 ## Entry Points
 
-## Backend execution start
-### `backend/app.py`
-Primary runtime entry point for the product.  
-This is the server developers will run daily.
+## Runtime entry points
 
-### Script entry points
-These are secondary standalone entry points for local pipeline debugging:
-- `backend/parser.py`
-- `backend/tailor.py`
-- `backend/writer.py`
+### Backend server
+- `backend/app.py`
+- Start with:
+  ```bash
+  cd backend
+  pip install -r requirements.txt
+  python app.py
+  ```
 
-Each has an `if __name__ == "__main__":` block.
+### Standalone backend scripts
+Useful for debugging specific pipeline stages independently:
 
-## Frontend execution start
-### `frontend/manifest.json`
-Declares the extension popup:
-```json
-"action": {
-  "default_popup": "popup.html"
-}
-```
+- Parse resume:
+  ```bash
+  python backend/parser.py
+  ```
+- Tailor parsed resume:
+  ```bash
+  python backend/tailor.py
+  ```
+- Generate DOCX:
+  ```bash
+  python backend/writer.py
+  ```
 
-### `frontend/popup.html`
-Loads:
-```html
-<script src="popup.js"></script>
-```
-So popup execution effectively starts in `frontend/popup.js`.
+These scripts depend on local files like:
+- `resume_fixed.json`
+- `jd.txt`
+- `tailored_resume.json`
 
-### `frontend/scraper.js`
-This is not a static content script in `manifest.json`; it is likely injected dynamically by `popup.js` using `chrome.scripting`. Developers working on JD extraction will touch both files together.
+### Chrome extension
+- Extension entry is `frontend/manifest.json`
+- Popup entry is:
+  - `frontend/popup.html`
+- Popup behavior is implemented in:
+  - `frontend/popup.js`
 
-## Daily-touch files
+### Content script execution
+- `frontend/scraper.js` is not declared statically in the manifest; it is intended to be injected dynamically via `chrome.scripting.executeScript` from `popup.js`.
 
-Most likely:
-- `backend/app.py` — API routes and orchestration
-- `backend/tailor.py` — Gemini tailoring behavior
-- `backend/writer.py` — resume output formatting
-- `frontend/popup.js` — UI actions and backend calls
-- `frontend/scraper.js` — job-page extraction logic
-- `frontend/popup.html` — popup controls/layout
+## Files a developer will touch most often
+- `backend/app.py` — API contract and request routing
+- `backend/parser.py` — resume schema extraction and Gemini prompt
+- `backend/tailor.py` — tailoring prompt and JSON parsing
+- `backend/writer.py` — output formatting and DOCX layout
+- `frontend/popup.js` — main UI behavior and backend calls
+- `frontend/popup.html` — popup controls / DOM IDs
+- `frontend/scraper.js` — JD scraping selectors
 
-Less frequently:
-- `backend/parser.py` — resume schema extraction/prompt tuning
-- `frontend/manifest.json` — permissions and extension behavior
-
-## Notable implementation details / gotchas
-
-- `README.md` says `extension/`, but actual folder is `frontend/`.
-- `popup.html` includes a large inline `<style>` block; `frontend/style.css` appears redundant or stale.
-- `scraper.js` currently has real selector support only for LinkedIn despite broader host permissions.
-- `writer.py` expects optional `GPA`, but `parser.py`’s schema does not produce it.
-- Gemini output cleaning is duplicated in `parser.py` and `tailor.py`; there is no shared utility module.
-- API keys are hardcoded placeholders, not environment-driven.
-- The schema uses exact human-readable keys with spaces/title case; accidental renaming will break downstream consumers fast.
+## Important implementation details to know on day one
+- Gemini API keys are currently hardcoded placeholders in:
+  - `backend/parser.py`
+  - `backend/tailor.py`
+- Frontend manifest has host permissions for multiple job sites, but only LinkedIn scraping is implemented in `frontend/scraper.js`.
+- The backend pipeline is effectively:
+  1. parse uploaded resume into JSON
+  2. tailor JSON to JD
+  3. render tailored JSON to DOCX/PDF
+- The UI relies heavily on stable element IDs in `popup.html`; changing IDs will break `popup.js` and `frontend/test_popup_theme.js`.
