@@ -228,7 +228,7 @@ async function test_apply_light_theme_restores_root_theme_state() {
   const { context, body, elements } = buildEnvironment(DARK_THEME);
   context.applyTheme(LIGHT_THEME);
 
-  assert.strictEqual(body.getAttribute(THEME_ATTRIBUTE), LIGHT_THEME);
+  assert.ok(!body.classList.contains(THEME_CLASS));
   assert.strictEqual(elements.get("themeToggle").checked, false);
   assert.strictEqual(elements.get("themeToggleLabel").textContent, "Light mode");
 }
