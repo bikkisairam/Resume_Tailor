@@ -219,7 +219,7 @@ async function test_apply_dark_theme_updates_root_theme_state() {
   const { context, body, elements } = buildEnvironment();
   context.applyTheme(DARK_THEME);
 
-  assert.strictEqual(body.getAttribute(THEME_ATTRIBUTE), DARK_THEME);
+  assert.ok(body.classList.contains(THEME_CLASS));
   assert.strictEqual(elements.get("themeToggle").checked, true);
   assert.strictEqual(elements.get("themeToggleLabel").textContent, "Dark mode");
 }
