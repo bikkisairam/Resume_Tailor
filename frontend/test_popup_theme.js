@@ -237,7 +237,7 @@ async function test_saved_theme_restored_on_popup_init() {
   const { body, elements } = buildEnvironment(DARK_THEME);
   await flushMicrotasks();
 
-  assert.strictEqual(body.getAttribute(THEME_ATTRIBUTE), DARK_THEME);
+  assert.ok(body.classList.contains(THEME_CLASS));
   assert.strictEqual(elements.get("themeToggle").checked, true);
 }
 
