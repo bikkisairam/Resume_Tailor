@@ -245,7 +245,7 @@ async function test_no_saved_theme_defaults_to_light() {
   const { body, elements } = buildEnvironment();
   await flushMicrotasks();
 
-  assert.strictEqual(body.getAttribute(THEME_ATTRIBUTE), LIGHT_THEME);
+  assert.ok(!body.classList.contains(THEME_CLASS));
   assert.strictEqual(elements.get("themeToggle").checked, false);
 }
 
