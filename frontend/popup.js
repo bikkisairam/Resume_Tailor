@@ -52,7 +52,13 @@ function showDownloads() {
  */
 function applyTheme(theme) {
   const normalizedTheme = theme === THEME_DARK ? THEME_DARK : THEME_LIGHT;
-  document.body.setAttribute(THEME_ATTRIBUTE, normalizedTheme);
+  
+  if (normalizedTheme === THEME_DARK) {
+    document.body.classList.add(THEME_CLASS);
+  } else {
+    document.body.classList.remove(THEME_CLASS);
+  }
+  
   themeToggle.checked = normalizedTheme === THEME_DARK;
   themeToggleLabel.textContent = THEME_LABELS[normalizedTheme];
 }
