@@ -16,6 +16,14 @@ class FakeClassList {
     this.classes = new Set();
   }
 
+  add(className) {
+    this.classes.add(className);
+  }
+
+  remove(className) {
+    this.classes.delete(className);
+  }
+
   toggle(className) {
     if (this.classes.has(className)) {
       this.classes.delete(className);
