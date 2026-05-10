@@ -35,6 +35,11 @@ def index():
     return {"message": "Resume Tailor API is running 🚀"}
 
 
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"}), 200
+
+
 # ---------- STEP 0: Upload Resume ----------
 @app.route("/upload_resume", methods=["POST"])
 def upload_resume():
